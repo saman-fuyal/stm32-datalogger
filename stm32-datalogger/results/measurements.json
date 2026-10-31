@@ -1,0 +1,62 @@
+{
+  "_note": "Measured values used by docs/report/build_report.py. The notes and procedures are in timing.md and current_measurements.md.",
+  "timing": {
+    "date": "20-10-2026",
+    "log_file": "LOG0123.CSV",
+    "samples_timed": 3056,
+    "minutes": 51,
+    "baud": 115200,
+    "rows_us": [
+      ["sample period", 1000000, 999998, 1000002],
+      ["sensor read", 24198, 24197, 24198],
+      ["line + CRC", 1343, 1318, 1408],
+      ["UART (DMA)", 99368, 2524, 99368],
+      ["SD write", 5261, 261, 41815],
+      ["sample -> SD", 130356, 28487, 130356]
+    ],
+    "typing_note": "The 'last' and 'max' values of UART and sample -> SD were taken while typing 'timing': the CLI holds the UART, the logger waits up to 100 ms and then skips the UART copy of that line. 8 lines were skipped in 51 minutes.",
+    "cpu_share_awake": {"IDLE": 81.0, "Logger": 10.6, "Sensor": 8.0, "Cli": 0.1},
+    "heap_free": 3680,
+    "heap_lowest": 1520,
+    "heap_total": 10240,
+    "records_dropped": 0,
+    "uart_lines_skipped": 8,
+    "rate_250_ms": {"date": "19-10-2026", "samples": 822, "min_us": 249998, "max_us": 250002}
+  },
+  "current": {
+    "date": "19-10-2026",
+    "where": "whole breadboard at the 5 V input (Blue Pill, BMP280, GY-521, SD module)",
+    "rows_ma": [
+      ["power run", "logging, CPU never sleeps", 17.62],
+      ["power sleep", "logging, WFI between tasks", 12.94],
+      ["power stop", "logging, STOP between samples", 9.3],
+      ["stop + power stop", "not logging, STOP", 9.1],
+      ["as above + mpusleep", "not logging, MPU6050 asleep", 7.92],
+      ["power stop, no SD card", "logging to the UART only", 9.9]
+    ],
+    "stop_share_quiet_pct": 96,
+    "stop_share_3min_pct": 81,
+    "led_ma": 1.7,
+    "battery_mah": 2500,
+    "battery_v": 3.7,
+    "boost_efficiency": 0.85,
+    "supply_v": 5.0
+  },
+  "build": {
+    "tool": "STM32CubeIDE, -Os",
+    "flash_kb": 44.8,
+    "flash_total_kb": 64,
+    "ram_kb": 14.4,
+    "ram_total_kb": 20
+  },
+  "vdd_check": {
+    "meter_v": 3.22,
+    "cp2102_5v_v": 4.98
+  },
+  "matrix_board": {
+    "built": "31-10-2026",
+    "bench_tests": "28-10-2026",
+    "boost_setting_v": 5.30,
+    "coin_cell_off_minutes": 2
+  }
+}

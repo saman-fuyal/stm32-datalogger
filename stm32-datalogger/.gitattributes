@@ -1,0 +1,8 @@
+* text=auto
+# log files are kept byte for byte (lines end with \r\n, as on the SD card)
+*.CSV -text
+*.csv -text
+*.png binary
+*.jpg binary
+*.docx binary
+*.pdf binary
