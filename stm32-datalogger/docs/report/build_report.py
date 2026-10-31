@@ -42,7 +42,7 @@ import docx_lib as D                                   # noqa: E402
 import figures as FG                                   # noqa: E402
 from log_check import TIME_FORMAT, parse_line          # noqa: E402
 
-TITLE = "Design and Timing Measurement of a Low-Power Sensor Data Logger on an STM32F103 with FreeRTOS"
+TITLE = "Design and Timing Verification of an RTOS-Based Sensor Data Logger on an STM32F103"
 # One sentence of thanks, if you want an Acknowledgment section (left out while empty).
 ACKNOWLEDGMENT = ""
 COL = 243.0            # one column in pt (A4, two columns)
@@ -228,12 +228,12 @@ REFS = {
     "wickert": "A. D. Wickert, C. T. Sandell, B. Schulz, and G.-H. C. Ng, \u201cOpen-source Arduino-compatible "
                "data loggers designed for field research,\u201d *Hydrol. Earth Syst. Sci.*, vol. 23, "
                "pp. 2065\u20132076, 2019, doi: 10.5194/hess-23-2065-2019.",
-    "santiago": "G. N. Santiago and I. Ciampitti, \u201cMultiple channels, low-cost, and dual data storage data "
-                "logger for building a soil temperature network,\u201d *HardwareX*, Art. no. e00582, 2024, "
-                "doi: 10.1016/j.ohx.2024.e00582.",
-    "perret": "F. Perret *et al.*, \u201ceLogUp! A precise, affordable and open-source IoT data logger to "
-              "scale-up long-term environmental monitoring,\u201d *HardwareX*, vol. 23, Art. no. e00660, 2025, "
-              "doi: 10.1016/j.ohx.2025.e00660.",
+    "hypnos": "B. Nguyen, B. Goto, J. S. Selker, and C. Udell, \u201cHypnos board: A low-cost all-in-one solution "
+              "for environment sensor power management, data storage, and task scheduling,\u201d *HardwareX*, "
+              "vol. 10, Art. no. e00213, 2021, doi: 10.1016/j.ohx.2021.e00213.",
+    "butler": "J. D. Butler, E. C. Hensel, N. Meltzer, and R. J. Robinson, \u201cExtending field deployment of "
+              "wireless personal use monitors via STM32L4 low-power configurations,\u201d *Electronics*, vol. 15, "
+              "no. 21, Art. no. 4983, 2026, doi: 10.3390/electronics15214983.",
     "tp4056": "NanJing Top Power, \u201cTP4056 1A standalone linear Li-ion battery charger,\u201d data sheet.",
     "mt3608": "Aerosemi, \u201cMT3608 high efficiency 1.2 MHz 2 A step up converter,\u201d data sheet.",
     "cp2102": "Silicon Labs, \u201cCP2102/9 single-chip USB-to-UART bridge,\u201d data sheet.",
@@ -404,8 +404,8 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
                   f"with its own clock.")
     d.B.append(D.para("Abstract", D.run("Abstract", i=True, b=True) + D.run("\u2014", b=True) + D.rich(
         "A data logger has to take samples at a steady rate, keep the correct time through a power cut, "
-        "store data that can be checked later, and run for days from a battery. This report describes "
-        "such a logger built on an STM32F103C8 microcontroller. It reads a BMP280 pressure and "
+        "store data that can be checked later, and use little current between samples. This report "
+        "describes such a logger built on an STM32F103C8 microcontroller. It reads a BMP280 pressure and "
         "temperature sensor and an MPU6050 accelerometer and gyroscope over I2C, adds the chip's own "
         "temperature and supply voltage, and writes one CSV line per sample to a micro SD card with a "
         "CRC-32 at the end of every line. The firmware is written on the registers without a vendor "
@@ -414,7 +414,8 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
         f"sample. In a {T['minutes']}-minute run at one sample per second the period measured by the "
         f"firmware stayed within \u00b12 \u00b5s, a sample reached the card {to_card_ms:.1f} ms after it was "
         f"taken, and {us(L['lines'])} lines had {L['bad']} CRC errors. STOP mode lowered the board "
-        f"current from {cm['power run']:g} mA to {cm['power stop']:g} mA, a {stop_cut:.0f} % reduction. "
+        f"current from {cm['power run']:g} mA to {cm['power stop']:g} mA, a {stop_cut:.0f} % reduction; the rest is drawn by the "
+        f"off-the-shelf modules, which stay powered. "
         f"Comparing the time stamps with the line count showed that the real sample period is "
         f"{L['period']:.4f} s, an error of {drift_pct:.2f} % that the firmware's own timing cannot see "
         f"because it uses the same clock that schedules the samples.{la_txt} The final circuit runs from "
@@ -422,7 +423,7 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
         base_b=True)))
     d.B.append(D.para("Keywords", D.run("Keywords\u2014", b=True, i=True) + D.rich(
         "data logger, STM32F103, FreeRTOS, tickless idle, STOP mode, real-time clock, SD card, FatFs, "
-        "CRC-32, low power", base_b=True)))
+        "CRC-32, power management", base_b=True)))
 
     # ------------------------------------------------------------ I introduction
     H1("Introduction")
@@ -463,39 +464,50 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
 
     # ------------------------------------------------------------ II related work
     H1("Related Work and Research Gap")
-    P("Baker built an open-source logger for environmental monitoring on an Arduino Mega, with a "
-      "micro SD card on an Ethernet shield, a DS1307 clock backed by a CR2032 and a sleep library to save "
-      "power {baker}. Beddows and Mallon developed the Cave Pearl logger on an ATmega328P with a DS3231 "
-      "clock {beddows}. It buffers readings in an EEPROM and writes them to the SD card in groups, checks "
-      "the battery before each write, and sleeps at about 0.2 mA, which gives more than a year on three AA "
-      "cells. Wickert et al. described Arduino-compatible loggers on the ATmega328p and 644p with a DS3231, "
-      "an SD card and a watchdog; they sleep at about 12 \u00b5A and run for about two years on three AA "
-      "cells {wickert}.")
-    P("More recent designs add a second place for the data. Santiago and Ciampitti built a multi-channel "
-      "soil temperature logger that stores data on a micro SD card and also sends it over LoRa to a "
-      "database {santiago}. Perret et al. built eLogUp!, an Arduino MKR logger with a real-time clock, "
-      "automatic wake-up and WiFi, GSM or LoRaWAN, powered by a LiPo cell with a solar panel {perret}. "
-      "[tab:related] compares these designs with this work.")
+    P("Most published open-source loggers are built on Arduino boards. Baker built one for environmental "
+      "monitoring on an Arduino Mega, with a micro SD card, a DS1307 clock backed by a CR2032 and a sleep "
+      "library {baker}. Beddows and Mallon developed the Cave Pearl logger on an ATmega328P with a DS3231 "
+      "clock {beddows}; it buffers readings in an EEPROM, writes them to the SD card in groups and sleeps "
+      "at about 0.2 mA, which gives more than a year on three AA cells. Wickert et al. described loggers on "
+      "the ATmega328p and 644p with a DS3231, an SD card and a watchdog, which sleep at about 12 \u00b5A and "
+      "run for about two years on three AA cells {wickert}.")
+    P("Two works use 32-bit Arm microcontrollers. Nguyen et al. built Hypnos, a board for an Adafruit "
+      "Feather M0 (a Cortex-M0+) that adds a micro SD slot, a DS3231 with a coin cell, and switched supply "
+      "rails so the sensors and storage can be powered down between samples {hypnos}. In a field test on "
+      "a 6600 mAh cell it took about 25 times more samples than the same system without it; the software "
+      "is Arduino code without an operating system. Butler et al. built personal-use monitors on an "
+      "STM32L433 and compared its low-power modes {butler}. The monitors log to external flash and wake "
+      "from STOP every 60 s with the RTC alarm. For the microcontroller alone, the vendor's estimate in "
+      "STOP1 mode is 4.34 \u00b5A, and the whole device ran a mean of 30.15 days on a 350 mAh cell. Their "
+      "timing check is the continuity of the time stamps.")
+    P("[tab:related] sets these works beside this one. The columns show what each paper reports, and "
+      "the last column says what each current figure covers, because the numbers are not measured in the "
+      "same way.")
     d.TABLE("related", "Comparison with Published Loggers", [
-        ["Work", "Microcontroller", "Storage", "Clock", "Power", "Line check", "Software"],
-        ["{baker}", "ATmega2560", "micro SD", "DS1307 + CR2032", "sleep library", "none", "Arduino loop"],
-        ["{beddows}", "ATmega328P", "micro SD, EEPROM buffer", "DS3231", "0.2 mA sleep, 3\u00d7AA",
-         "not reported", "Arduino loop"],
-        ["{wickert}", "ATmega328p/644p", "SD card", "DS3231", "12 \u00b5A sleep, 3\u00d7AA",
-         "not reported", "Arduino loop"],
-        ["{santiago}", "Arduino + LoRa", "micro SD + database", "RTC module", "battery",
-         "not reported", "Arduino"],
-        ["{perret}", "Arduino MKR", "radio upload", "RTC, auto wake-up", "LiPo + solar",
-         "not reported", "Arduino"],
-        ["This work", "STM32F103C8", "micro SD (FatFs)", "internal RTC, 1024 Hz, CR2032",
-         f"STOP, {cm['power stop']:g} mA board, 18650", "CRC-32 per line", "FreeRTOS, registers"],
-    ], [52, 70, 74, 80, 92, 58, 66], align="llllllll", full=True)
-    P("The published loggers reach very low sleep currents because their boards are designed for it. "
-      "In every one of them the firmware is a single loop on an Arduino-class microcontroller, and as far "
-      "as the papers describe, none stores a checksum with each line or measures its own sample period "
-      "against its clock. This work uses ready-made modules, so its sleep current is set mostly by the "
-      "modules, but it adds an operating system that keeps sampling independent of storage, a check on "
-      "every stored line, and measurements of its own timing from two separate clocks.")
+        ["Work", "Micro-controller", "Software", "Storage", "Time stamps", "Check per line",
+         "Timing checked against", "Current reported (what it covers)"],
+        ["{baker}", "ATmega2560", "Arduino loop", "micro SD", "DS1307 + CR2032", "not described",
+         "not described", "not reported"],
+        ["{beddows}", "ATmega328P", "Arduino loop", "micro SD, EEPROM buffer", "DS3231", "not described",
+         "not described", "about 0.2 mA asleep (logger)"],
+        ["{wickert}", "ATmega328p / 644p", "Arduino loop", "SD card", "DS3231", "not described",
+         "not described", "about 12 \u00b5A asleep (logger)"],
+        ["{hypnos}", "SAMD21 (Cortex-M0+)", "Arduino loop", "micro SD", "DS3231 + coin cell",
+         "not described", "not described", "not reported; 25\u00d7 more samples per charge"],
+        ["{butler}", "STM32L433 (Cortex-M4)", "not stated", "external flash", "internal RTC",
+         "not described", "time stamp continuity", "4.34 \u00b5A in STOP1 (MCU, estimate); 30 days on 350 mAh"],
+        ["This work", "STM32F103C8 (Cortex-M3)", "FreeRTOS, registers", "micro SD (FatFs)",
+         "internal RTC at 1024 Hz + CR2032", "CRC-32", "RTC time stamps (tick vs. crystal)",
+         f"{cm['power stop']:g} mA in STOP (whole breadboard with modules, at 5 V)"],
+    ], [42, 62, 54, 58, 66, 48, 66, 108], align="llllllll", full=True)
+    P("The purpose-built loggers draw two to three orders of magnitude less current than this board. "
+      "Their boards are designed for it, and Hypnos switches off the sensors and storage between samples. "
+      "This logger uses ready-made modules: the SD module's regulator, the power LEDs and the sensors stay "
+      "powered, so its current is set by the modules, not by the microcontroller. Its contribution is on "
+      "the firmware side. As far as the papers describe, none of the other loggers uses an operating "
+      "system to keep sampling independent of slow storage, stores a checksum with each line, or checks "
+      "its sample period against a second clock. Butler et al. come closest, checking that the time "
+      "stamps are continuous, which shows missing records but not a period that is slightly too long.")
 
     # ------------------------------------------------------------ III architecture
     H1("System Architecture")
@@ -595,7 +607,7 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
       "firmware at power-on whether the time survived on the coin cell.")
     d.EQ(E["rtc"], "rtc")
 
-    H2("Low-Power Operation")
+    H2("Power Management")
     P("FreeRTOS knows when the next task is due. When no task is ready, the idle task calls "
       "power_idle() with the time until then, called tickless idle {freertos, barry}. [fig:idle] shows "
       "what that function does. Three modes can be chosen with the power command. In run mode the CPU "
@@ -730,8 +742,8 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
       "current at the input voltage V_{in}.")
     d.EQ(E["life"], "life")
     d.FIG("meter", F["meter"], "Current measurement at the 5 V input of the breadboard in STOP mode.")
-    P(f"Before the circuit went onto the matrix board, each power part was tested on its own on "
-      f"{mb['bench_tests']}: the 18650 cell, charging through the TP4056 with its protection, the switch, "
+    P(f"Before the circuit went onto the matrix board, each power part was tested on its own: "
+      f"the 18650 cell, charging through the TP4056 with its protection, the switch, "
       f"the MT3608 adjusted to {mb['boost_setting_v']:.2f} V before anything was connected to it, both "
       "diodes, the change-over between USB and battery, charging while the board ran, and the coin cell. "
       "The resistance from VBAT to 3.3 V was also measured and found open; on some Blue Pill copies these "
@@ -743,7 +755,7 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
     H1("Results and Discussion")
     H2("Timing")
     P(f"[tab:timing] shows the step times after {T['minutes']} minutes of logging at one sample per "
-      f"second with STOP mode on ({T['date']}, {us(T['samples_timed'])} samples).")
+      f"second with STOP mode on ({us(T['samples_timed'])} samples).")
     rows = [["Step", "Last (\u00b5s)", "Min (\u00b5s)", "Max (\u00b5s)"]]
     for r in T["rows_us"]:
         rows.append([r[0], us(r[1]), us(r[2]), us(r[3])])
@@ -763,7 +775,7 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
 
     H2("Data Integrity and Sensor Readings")
     P(f"The log {L['file']} runs from {L['first'].strftime('%H:%M:%S')} to "
-      f"{L['last'].strftime('%H:%M:%S')} on {L['first'].strftime('%d-%m-%Y')}. It has {us(L['lines'])} "
+      f"{L['last'].strftime('%H:%M:%S')}. It has {us(L['lines'])} "
       f"data lines, {L['bad']} with a wrong CRC, and no gap longer than 2 s. The values change very little "
       "over the run, so they mainly show the noise and offsets of the sensors ([tab:stats] and [fig:logplot]).")
     rows = [["Column", "Min", "Max", "Mean", "Std. dev."]]
@@ -815,7 +827,7 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
                          f"{LA['width_min_ms']:.3f} and {LA['width_max_ms']:.3f} ms, against "
                          f"{LA['firmware_read_ms']:.3f} ms from the firmware's timing command.")
         rate = f" at {LA['sample_rate']}" if LA.get("sample_rate") else ""
-        P(f"On {LA['date']} the PB12 test point was recorded with a {LA['analyzer']}{rate} for "
+        P(f"The PB12 test point was recorded with a {LA['analyzer']}{rate} for "
           f"{LA['capture_s']:.0f} s ({LA['periods']} sample periods). The mean period was "
           f"{LA['period_mean_s']:.6f} s ({LA['period_error_ppm']:+.0f} ppm from 1 s), the shortest "
           f"{LA['period_min_s']:.6f} s and the longest {LA['period_max_s']:.6f} s, with a standard "
@@ -836,7 +848,7 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
 
     H2("Current Consumption")
     P(f"[tab:current] gives the current of the whole breadboard (Blue Pill, both "
-      f"sensors and the SD module) at the 5 V input, measured on {cur['date']}.")
+      f"sensors and the SD module) at the 5 V input.")
     rows = [["Command", "State", "Current (mA)"]]
     for r in cur["rows_ma"]:
         rows.append([r[0], r[1], f"{r[2]:g}"])
@@ -854,7 +866,7 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
       f"in STOP mode and {battery_days(cm['power run']):.1f} days in run mode.")
     if BAT:
         H2("Current from the Battery")
-        P(f"On {BAT['date']} the current drawn from the 18650 was measured on the matrix board, with the "
+        P(f"The current drawn from the 18650 was measured on the matrix board, with the "
           f"multimeter in place of the open switch SW1, the CP2102 and the ST-Link unplugged, and the cell "
           f"at {BAT['battery_v']:.2f} V ([tab:bat]). This includes the TP4056, the boost converter and "
           "both diodes.")
@@ -866,8 +878,8 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
               f"{battery_days(cm['power stop']):.1f} days estimated from the breadboard with [eq:life].")
 
     H2("Matrix Board")
-    P(f"The circuit was rebuilt on a matrix board with every module on female headers ([fig:matrix]), "
-      f"finished on {mb['built']}. It runs from the 18650 alone or from the CP2102, charges through the "
+    P(f"The circuit was rebuilt on a matrix board with every module on female headers ([fig:matrix]). "
+      f"It runs from the 18650 alone or from the CP2102, charges through the "
       "TP4056's USB-C connector while it logs, and writes to the SD card in the same format as the "
       "breadboard. With the CR2032 fitted, the clock kept the correct time through a "
       f"{mb['coin_cell_off_minutes']}-minute power-off, so the time needs to be set only once.")
@@ -876,7 +888,7 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
         H2("PCB Layout")
         size = PCB.get("size_mm", [])
         txt = (f"The schematic was taken into a printed circuit board layout in {PCB.get('tool', 'EasyEDA')} "
-               f"on {PCB.get('date', '')} ([tab:pcb]).")
+               "([tab:pcb]).")
         if PCB.get("notes"):
             txt += " " + PCB["notes"]
         P(txt)
@@ -932,8 +944,12 @@ def build(labels, M, L, C, LA, BAT, PCB, F, E):
     else:
         lim.append(f"The battery life of {battery_days(cm['power stop']):.1f} days is computed from the "
                    "breadboard current at 5 V and an assumed 85 % boost efficiency.")
-    lim.append("The sleep current is set by the modules, not by the microcontroller: the SD module's "
-               "regulator, the power LEDs and the sensors stay powered.")
+    lim.append(f"The board current in STOP, {cm['power stop']:g} mA, is two to three orders of magnitude "
+               "above the purpose-built loggers in [tab:related]. It is set by the modules, not by the "
+               "microcontroller: the SD module's regulator, the power LEDs and the sensors stay powered, and "
+               f"putting only the MPU6050 to sleep already saves "
+               f"{cm['stop + power stop'] - cm['as above + mpusleep']:.1f} mA. The power result of this work "
+               "is the firmware's share, not a low-current board.")
     P(" ".join(lim))
 
     # ------------------------------------------------------------ VII conclusion

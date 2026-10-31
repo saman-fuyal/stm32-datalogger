@@ -1,4 +1,4 @@
-# Low-Power Sensor Data Logger on an STM32F103 with FreeRTOS
+# RTOS-Based Sensor Data Logger on an STM32F103 (FreeRTOS, registers only)
 
 Saman Fuyal, Department of Electrical and Electronics Engineering, Kathmandu University
 
@@ -62,6 +62,10 @@ STOP mode cuts the board current by 47 %. The chip is in STOP about 96 % of the 
 types. What is left is mostly the modules: the SD module's regulator, the MPU6050 and the power
 LEDs. From a 2500 mAh 18650 through the boost converter this gives about 7 days in STOP mode
 against about 3.7 days in run mode.
+
+These are not low currents for a battery logger: loggers built for long deployments sleep at
+12 uA to 0.2 mA. This board uses ready-made modules that stay powered, so the result here is
+what the firmware saves, not a low-current board (see the report, Section II).
 
 Matrix board (rev B): runs from the 18650 alone or from the CP2102, charges over USB-C while it
 logs, and the CR2032 kept the clock correct through a 2-minute power-off.

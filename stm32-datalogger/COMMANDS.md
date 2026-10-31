@@ -260,7 +260,7 @@ To add an Acknowledgment section, put one sentence in `ACKNOWLEDGMENT = ""` near
 ### First upload
 
 1. On github.com, sign in, click **+** (top right) > **New repository**.
-2. Name: `stm32-datalogger`. Description, for example: "Low-power STM32F103 data logger on
+2. Name: `stm32-datalogger`. Description, for example: "STM32F103 sensor data logger on
    FreeRTOS, registers only". Public. Leave "Add a README", ".gitignore" and "license" all
    off (the project has its own README, .gitignore and LICENSE; a file made by GitHub would
    block the first push).
@@ -290,7 +290,7 @@ The first push opens a browser window to sign in to GitHub. Afterwards, refresh 
 repository page: the README with the board photo shows on the front page.
 
 5. On the repository page, click the gear next to **About** and add topics: `stm32`,
-   `freertos`, `embedded`, `data-logger`, `bare-metal`, `low-power`.
+   `freertos`, `embedded`, `data-logger`, `bare-metal`, `sd-card`.
 
 If the push says "rejected ... fetch first", the repository on GitHub was created with a file
 in it. Run `git pull origin main --allow-unrelated-histories`, close the editor that opens
